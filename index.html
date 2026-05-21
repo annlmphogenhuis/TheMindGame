@@ -50,7 +50,7 @@
 <p class="subtitle">Poster demo — Utrecht University</p>
 
 <div class="rule">
-  You and 3 bots each have 3 cards (1–100). Play all 12 in ascending order — no talking! Tap your card once to select, tap again to play. If anyone plays out of order the game ends immediately.
+  You and 3 bots each have 3 cards (1–100). Play all 12 in ascending order, no talking is allowed! Tap your card once to select, tap again to play. If anyone plays out of order the game ends immediately.
 </div>
 
 <div class="grid">
@@ -193,7 +193,7 @@ function endGame(won, msg) {
   document.getElementById('overlay-emoji').textContent = won ? '🎉' : '💥';
   document.getElementById('overlay-title').textContent = won ? 'Perfect sync!' : 'Out of order!';
   document.getElementById('overlay-msg').textContent = won
-    ? 'All 12 cards played in order. The group was in sync — just like in the study!'
+    ? 'All 12 cards played in order. The group was in sync just like in the study!'
     : (msg || '') + ' Hard to sync without talking!';
   document.getElementById('overlay').classList.add('show');
 }
