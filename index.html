@@ -138,6 +138,17 @@ function doPlay(who, card) {
     return;
   }
 
+  // Bot plays but human has a lower card
+  if (who !== 'you' && hands.you.length) {
+    var humanMin = hands.you[0];
+    if (humanMin < card) {
+      addLog('💥 ' + name + ' played ' + card + ' but you had ' + humanMin + '!');
+      render();
+      endGame(false, name + ' played ' + card + ' too early — you still had ' + humanMin + '.');
+      return;
+    }
+  }
+
   // Human plays but a bot has a lower card
   if (who === 'you') {
     var allBotCards = hands.b1.concat(hands.b2, hands.b3);
