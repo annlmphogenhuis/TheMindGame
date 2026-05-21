@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Mind</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: sans-serif; background: #f0f4f8; min-height: 100vh; padding: 24px 16px; }
+  h1 { font-size: 22px; font-weight: 600; margin-bottom: 4px; }
+  .subtitle { font-size: 13px; color: #666; margin-bottom: 16px; }
+  .rule { font-size: 13px; color: #555; background: #fff; border-radius: 10px; padding: 12px 16px; margin-bottom: 20px; line-height: 1.6; border: 1px solid #e0e0e0; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+  .player-box { background: #fff; border-radius: 10px; padding: 12px; border: 1px solid #e0e0e0; }
+  .player-box.you { border-color: #378ADD; }
+  .player-label { font-size: 13px; font-weight: 600; margin-bottom: 8px; color: #333; }
+  .cards-row { display: flex; gap: 6px; flex-wrap: wrap; min-height: 70px; align-items: flex-end; }
+  .card { display: inline-flex; align-items: center; justify-content: center; width: 52px; height: 74px; border-radius: 8px; font-size: 22px; font-weight: 600; cursor: pointer; border: 1.5px solid #ccc; background: #fff; color: #222; transition: transform 0.15s, border-color 0.15s; user-select: none; }
+  .card:hover { transform: translateY(-6px); border-color: #378ADD; }
+  .card.selected { border: 2.5px solid #378ADD; color: #185FA5; transform: translateY(-10px); background: #e8f2fc; }
+  .bot-card { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 62px; border-radius: 8px; font-size: 18px; background: #f5f5f5; border: 1px solid #ddd; color: #999; }
+  .pile-section { background: #fff; border-radius: 10px; padding: 12px 16px; border: 1px solid #e0e0e0; margin-bottom: 16px; display: flex; align-items: center; gap: 16px; }
+  .pile-card { display: inline-flex; align-items: center; justify-content: center; width: 52px; height: 74px; border-radius: 8px; font-size: 22px; font-weight: 600; background: #f5f5f5; border: 1px solid #ddd; color: #555; }
+  .status { font-size: 15px; font-weight: 600; color: #222; margin-bottom: 6px; min-height: 22px; }
+  .log-wrap { background: #fff; border-radius: 10px; border: 1px solid #e0e0e0; padding: 10px 14px; max-height: 80px; overflow-y: auto; margin-bottom: 16px; }
+  .log-entry { font-size: 12px; color: #666; line-height: 1.8; }
+  button { background: #378ADD; color: #fff; border: none; border-radius: 8px; padding: 10px 22px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  button:hover { background: #185FA5; }
+  .done-text { font-size: 12px; color: #aaa; }
+  .overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.55); align-items: center; justify-content: center; z-index: 100; }
+  .overlay.show { display: flex; }
+  .overlay-box { background: #fff; border-radius: 16px; padding: 32px 28px; text-align: center; max-width: 300px; }
+  .overlay-box .emoji { font-size: 48px; margin-bottom: 8px; }
+  .overlay-box h2 { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+  .overlay-box p { font-size: 14px; color: #555; margin-bottom: 20px; line-height: 1.5; }
+</style>
+</head>
+<body>
+
+<div class="overlay" id="overlay">
+  <div class="overlay-box">
+    <div class="emoji" id="overlay-emoji"></div>
+    <h2 id="overlay-title"></h2>
+    <p id="overlay-msg"></p>
+    <button onclick="startGame()">Play again</button>
+  </div>
+</div>
+
+<h1>🧠 The Mind</h1>
+<p class="subtitle">Poster demo — Utrecht University</p>
+
+<div class="rule">
+  You and 3 bots each have 3 cards (1–100). Play all 12 in ascending order — no talking! Tap your card once to select, tap again to play. If anyone plays out of order the game ends immediately.
+</div>
+
+<div class="grid">
+  <div class="player-box"><div class="player-label">🤖 Bot 1</div><div id="b1" class="cards-row"></div></div>
+  <div class="player-box"><div class="player-label">🤖 Bot 2</div><div id="b2" class="cards-row"></div></div>
+  <div class="player-box"><div class="player-label">🤖 Bot 3</div><div id="b3" class="cards-row"></div></div>
+  <div class="player-box you"><div class="player-label">👤 You</div><div id="you" class="cards-row"></div></div>
+</div>
+
+<div class="pile-section">
+  <div>
+    <div style="font-size:12px;color:#888;margin-bottom:4px;">Pile (last played)</div>
+    <div class="pile-card" id="pile-top">—</div>
+  </div>
+  <div id="pile-count" style="font-size:12px;color:#888;"></div>
+</div>
+
+<div id="status" class="status">Press New game to start!</div>
+<div class="log-wrap"><div id="log"></div></div>
+<button onclick="startGame()">New game</button>
+
+<script>
+var hands, pile, gameOver, selected, masterTimer;
+
+function shuffle(arr) {
+  for (var i = arr.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+  }
+  return arr;
+}
+
+function startGame() {
+  if (masterTimer) clearInterval(masterTimer);
+  selected = null; gameOver = false;
+  document.getElementById('overlay').classList.remove('show');
+  var deck = shuffle(Array.from({length: 100}, function(_, i) { return i + 1; }));
+  hands = {
+    you: deck.slice(0, 3).sort(function(a, b) { return a - b; }),
+    b1:  deck.slice(3, 6).sort(function(a, b) { return a - b; }),
+    b2:  deck.slice(6, 9).sort(function(a, b) { return a - b; }),
+    b3:  deck.slice(9, 12).sort(function(a, b) { return a - b; })
+  };
+  pile = [];
+  document.getElementById('log').innerHTML = '';
+  addLog('Game started! 🤫');
+  render();
+  setStatus('Tap one of your cards to play.');
+
+  // Master timer: every 1.5-2.5s, one bot considers playing
+  function botTick() {
+    if (gameOver) return;
+    var bots = ['b1','b2','b3'].filter(function(b) { return hands[b].length > 0; });
+    if (!bots.length) return;
+    // Always pick the bot with the global minimum card
+    var allBotCards = hands.b1.concat(hands.b2, hands.b3);
+    if (!allBotCards.length) return;
+    var globalBotMin = Math.min.apply(null, allBotCards);
+    var bot = hands.b1.indexOf(globalBotMin) >= 0 ? 'b1' : hands.b2.indexOf(globalBotMin) >= 0 ? 'b2' : 'b3';
+    var card = globalBotMin;
+    doPlay(bot, card);
+  }
+
+  masterTimer = setInterval(function() {
+    if (!gameOver) botTick();
+    else clearInterval(masterTimer);
+  }, 1500 + Math.random() * 1000);
+}
+
+function allRemaining() {
+  return hands.you.concat(hands.b1, hands.b2, hands.b3);
+}
+
+function doPlay(who, card) {
+  if (gameOver) return;
+  if (hands[who].indexOf(card) < 0) return;
+  var last = pile.length ? pile[pile.length - 1] : 0;
+  var name = {you: 'You', b1: 'Bot 1', b2: 'Bot 2', b3: 'Bot 3'}[who];
+
+  // Card lower than pile — wrong order
+  if (card <= last) {
+    addLog('💥 ' + name + ' played ' + card + ' — pile was at ' + last + '!');
+    render();
+    endGame(false, name + ' played ' + card + ' but pile was already at ' + last + '.');
+    return;
+  }
+
+  // Human plays but a bot has a lower card
+  if (who === 'you') {
+    var allBotCards = hands.b1.concat(hands.b2, hands.b3);
+    var botMin = allBotCards.length ? Math.min.apply(null, allBotCards) : 999;
+    if (botMin < card) {
+      addLog('💥 You played ' + card + ' but a bot had ' + botMin + '!');
+      render();
+      endGame(false, 'You played ' + card + ' too early — a bot still had ' + botMin + '.');
+      return;
+    }
+  }
+
+  pile.push(card);
+  hands[who] = hands[who].filter(function(c) { return c !== card; });
+  addLog(name + ' played ' + card);
+
+  if (allRemaining().length === 0) {
+    render();
+    endGame(true);
+    return;
+  }
+
+  if (who === 'you') setStatus(hands.you.length ? 'Nice! Keep going.' : 'Your cards are done — waiting for bots.');
+  render();
+}
+
+function selectCard(n) {
+  if (gameOver) return;
+  if (selected === n) {
+    selected = null;
+    doPlay('you', n);
+  } else {
+    selected = n;
+    render();
+    setStatus('Tap ' + n + ' again to play it.');
+  }
+}
+
+function endGame(won, msg) {
+  gameOver = true;
+  clearInterval(masterTimer);
+  document.getElementById('overlay-emoji').textContent = won ? '🎉' : '💥';
+  document.getElementById('overlay-title').textContent = won ? 'Perfect sync!' : 'Out of order!';
+  document.getElementById('overlay-msg').textContent = won
+    ? 'All 12 cards played in order. The group was in sync — just like in the study!'
+    : (msg || '') + ' Hard to sync without talking!';
+  document.getElementById('overlay').classList.add('show');
+}
+
+function setStatus(msg) { document.getElementById('status').textContent = msg; }
+
+function addLog(msg) {
+  var log = document.getElementById('log');
+  var d = document.createElement('div');
+  d.className = 'log-entry';
+  d.textContent = msg;
+  log.appendChild(d);
+  log.parentNode.scrollTop = log.parentNode.scrollHeight;
+}
+
+function render() {
+  ['b1','b2','b3'].forEach(function(id) {
+    var area = document.getElementById(id);
+    area.innerHTML = '';
+    if (!hands[id].length) { area.innerHTML = '<span class="done-text">Done ✓</span>'; return; }
+    hands[id].forEach(function() {
+      var el = document.createElement('div');
+      el.className = 'bot-card';
+      el.textContent = '?';
+      area.appendChild(el);
+    });
+  });
+
+  var area = document.getElementById('you');
+  area.innerHTML = '';
+  if (!hands.you.length) {
+    area.innerHTML = '<span class="done-text">Done ✓</span>';
+  } else {
+    hands.you.forEach(function(n) {
+      var el = document.createElement('div');
+      el.className = 'card' + (selected === n ? ' selected' : '');
+      el.textContent = n;
+      (function(num) {
+        el.addEventListener('click', function() { selectCard(num); });
+      })(n);
+      area.appendChild(el);
+    });
+  }
+
+  document.getElementById('pile-top').textContent = pile.length ? pile[pile.length - 1] : '—';
+  document.getElementById('pile-count').textContent = pile.length ? pile.length + ' of 12 played' : '';
+}
+</script>
+</body>
+</html>
